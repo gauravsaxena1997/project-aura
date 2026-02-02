@@ -1,0 +1,8 @@
+{
+  "name": "Aura Terminal",
+  "description": "A Spatial Operating System interface using hand tracking and voice commands.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
