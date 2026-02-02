@@ -7,6 +7,7 @@ import { HandTrackingState } from '../types';
 interface Aura3DProps {
   handStateRef: React.MutableRefObject<HandTrackingState>;
   pulseTrigger: number;
+  baseColor: string;
 }
 
 // --- CONSTANTS ---
@@ -33,7 +34,7 @@ const SystemsCheckRing = () => {
 }
 
 // --- 2. THE PARTICLE ENGINE ---
-const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<HandTrackingState> }) => {
+const Particles = ({ handStateRef, baseColor }: { handStateRef: React.MutableRefObject<HandTrackingState>, baseColor: string }) => {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const { viewport } = useThree();
@@ -112,15 +113,13 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
             const worldGap = handDistance * viewport.width; 
             
             // 2. Set Radius to be roughly 35-40% of the gap (so Diameter is 70-80%)
-            // This ensures it fits *inside* the hands.
-            // clamp minimum size to 0.5 so it doesn't vanish.
             const sphereRadius = Math.max(0.5, worldGap * 0.35);
             
             // Calculate target on sphere surface
             target.copy(dualHandCenter).add(p.sphereDir.clone().multiplyScalar(sphereRadius));
             
             // Add high-energy vibration
-            const jitter = 0.05 + (handDistance * 0.1); // More jitter when hands are far apart (high energy)
+            const jitter = 0.05 + (handDistance * 0.1); 
             target.x += (Math.random() - 0.5) * jitter;
             target.y += (Math.random() - 0.5) * jitter;
             target.z += (Math.random() - 0.5) * jitter;
@@ -186,9 +185,16 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
     
     // Dynamic Material Color
     if (mesh.current.material instanceof THREE.MeshBasicMaterial) {
-        if (isTwoHanded) mesh.current.material.color.setHex(0xffaa00); // Gold for Energy Sphere
-        else if (activeWind !== 'none') mesh.current.material.color.setHex(0xffffff); // White for Wind
-        else mesh.current.material.color.setHex(0x22d3ee); // Cyan default
+        if (isTwoHanded) {
+             // DUAL HAND OVERRIDE -> GOLD
+            mesh.current.material.color.setHex(0xffaa00);
+        } else if (activeWind !== 'none') {
+             // FLICK OVERRIDE -> WHITE
+            mesh.current.material.color.setHex(0xffffff);
+        } else {
+             // DEFAULT -> USER SELECTED VOICE COLOR
+            mesh.current.material.color.set(baseColor);
+        }
     }
   });
 
@@ -196,7 +202,7 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
     <instancedMesh ref={mesh} args={[undefined, undefined, PARTICLE_COUNT]}>
       <sphereGeometry args={[DOT_SIZE, 8, 8]} />
       <meshBasicMaterial 
-        color="#22d3ee"
+        color={baseColor}
         transparent
         opacity={0.8}
         blending={THREE.AdditiveBlending}
@@ -207,7 +213,7 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
 };
 
 // --- 3. THE RETICLE ---
-const Reticle = ({ handStateRef }: { handStateRef: React.MutableRefObject<HandTrackingState> }) => {
+const Reticle = ({ handStateRef, baseColor }: { handStateRef: React.MutableRefObject<HandTrackingState>, baseColor: string }) => {
     const ref = useRef<THREE.Group>(null);
     const { viewport } = useThree();
 
@@ -237,19 +243,19 @@ const Reticle = ({ handStateRef }: { handStateRef: React.MutableRefObject<HandTr
                 <meshBasicMaterial color="white" blending={THREE.AdditiveBlending} depthTest={false} />
             </mesh>
             <Ring args={[0.1, 0.11, 32]}>
-                <meshBasicMaterial color="#22d3ee" transparent opacity={0.5} blending={THREE.AdditiveBlending} depthTest={false} />
+                <meshBasicMaterial color={baseColor} transparent opacity={0.5} blending={THREE.AdditiveBlending} depthTest={false} />
             </Ring>
         </group>
     )
 }
 
-export const Aura3D = ({ handStateRef, pulseTrigger }: Aura3DProps) => {
+export const Aura3D = ({ handStateRef, pulseTrigger, baseColor }: Aura3DProps) => {
   return (
     <>
       <ambientLight intensity={1} />
       <SystemsCheckRing />
-      <Particles handStateRef={handStateRef} />
-      <Reticle handStateRef={handStateRef} />
+      <Particles handStateRef={handStateRef} baseColor={baseColor} />
+      <Reticle handStateRef={handStateRef} baseColor={baseColor} />
     </>
   );
 };
