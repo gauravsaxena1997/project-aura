@@ -10,7 +10,7 @@ interface Aura3DProps {
 }
 
 // --- CONSTANTS ---
-const PARTICLE_COUNT = 800; // Increased density for Sphere effect
+const PARTICLE_COUNT = 800; 
 const HAND_RADIUS = 2.5; 
 const DOT_SIZE = 0.02; 
 
@@ -104,34 +104,38 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
     particles.forEach((p, i) => {
         let target = new THREE.Vector3();
         let scale = 1.0;
-        let colorOverride = false;
 
         // MODE 1: DUAL HAND ENERGY SPHERE
         if (isTwoHanded && centerPoint) {
-            // Dynamic Radius based on hand distance
-            // handDistance is approx 0.1 (close) to 0.8 (far)
-            // Map to World Units: 1.0 to 6.0
-            const sphereRadius = Math.max(1.5, handDistance * 8); 
+            // NEW LOGIC: Calculate radius relative to screen space
+            // 1. Convert normalized hand distance to approximate World Units
+            const worldGap = handDistance * viewport.width; 
+            
+            // 2. Set Radius to be roughly 35-40% of the gap (so Diameter is 70-80%)
+            // This ensures it fits *inside* the hands.
+            // clamp minimum size to 0.5 so it doesn't vanish.
+            const sphereRadius = Math.max(0.5, worldGap * 0.35);
             
             // Calculate target on sphere surface
             target.copy(dualHandCenter).add(p.sphereDir.clone().multiplyScalar(sphereRadius));
             
             // Add high-energy vibration
-            target.x += (Math.random() - 0.5) * 0.2;
-            target.y += (Math.random() - 0.5) * 0.2;
+            const jitter = 0.05 + (handDistance * 0.1); // More jitter when hands are far apart (high energy)
+            target.x += (Math.random() - 0.5) * jitter;
+            target.y += (Math.random() - 0.5) * jitter;
+            target.z += (Math.random() - 0.5) * jitter;
             
             // Particles rotate around center
-            const rotSpeed = 2.0;
+            const rotSpeed = 3.0;
             const x = target.x - dualHandCenter.x;
             const z = target.z - dualHandCenter.z;
             target.x = dualHandCenter.x + x * Math.cos(delta * rotSpeed) - z * Math.sin(delta * rotSpeed);
             target.z = dualHandCenter.z + x * Math.sin(delta * rotSpeed) + z * Math.cos(delta * rotSpeed);
 
-            colorOverride = true; // Mark for Gold color
         } 
         // MODE 2: SINGLE HAND GRAB (Gravity Well)
         else if (isFist && isPresent) {
-            target.copy(primaryHandPos).add(p.sphereDir.clone().multiplyScalar(1.2));
+            target.copy(primaryHandPos).add(p.sphereDir.clone().multiplyScalar(0.8)); // Tighter grab radius
             scale = 0.6;
         } 
         // MODE 3: IDLE / HOVER
@@ -151,15 +155,15 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
 
         // --- APPLY WIND FORCE (FLICK) ---
         if (activeWind === 'left') {
-            target.x -= 8; // Stronger push
-            scale = 0.5; // Stretch effect simulated by shrinking width visual perception
+            target.x -= 8; 
+            scale = 0.5; 
         } else if (activeWind === 'right') {
             target.x += 8;
             scale = 0.5;
         }
 
         // --- INTERPOLATION ---
-        const lerpFactor = activeWind !== 'none' ? 0.05 : (isTwoHanded ? 0.1 : 0.12);
+        const lerpFactor = activeWind !== 'none' ? 0.05 : (isTwoHanded ? 0.15 : 0.12);
         p.current.lerp(target, lerpFactor);
 
         // --- MATRIX UPDATE ---
@@ -176,11 +180,6 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
 
         dummy.updateMatrix();
         mesh.current.setMatrixAt(i, dummy.matrix);
-        
-        // Update Color (InstancedMesh color requires custom shader or iterating instanceColor, 
-        // for simplicity in this Phase 0, we stick to global material color or rely on blending)
-        // Note: Changing individual instance color in standard Three.js requires setting instanceColor buffer.
-        // For now, we use geometry scaling to indicate state.
     });
     
     mesh.current.instanceMatrix.needsUpdate = true;
