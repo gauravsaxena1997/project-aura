@@ -20,7 +20,8 @@ export const HUD: React.FC<HUDProps> = ({ logMessage }) => {
       MOVE: "Spatial Navigation: Your index finger acts as the cursor. The environment reacts to your presence, with particles parting like water around your hand.",
       PINCH: "Precision Selection: Bringing your Index and Thumb together triggers a 'Click'. Use this to select objects or activate buttons. The reticle turns Cyan.",
       GRAB: "Matter Manipulation: Closing your hand into a Fist exerts a magnetic force, pulling all digital matter (particles) into a structured sphere around you.",
-      FLICK: "Quick Navigation: A rapid horizontal movement of the wrist triggers a 'Swipe' command, used for paging through content or dismissing notifications."
+      FLICK: "Quick Navigation: A rapid horizontal movement of the wrist triggers a 'Swipe' command. The particles will streak white to visualize the wind force.",
+      DUAL: "Energy Field Generation: Raising both hands creates a resonant field. Moving hands apart expands the energy sphere; moving them closer condenses it."
   };
 
   return (
@@ -52,18 +53,18 @@ export const HUD: React.FC<HUDProps> = ({ logMessage }) => {
                     <li className="grid grid-cols-[20px_1fr_20px] items-center group">
                         <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
                         <div>
-                            <span className="font-bold text-white block">PINCH (Index+Thumb)</span>
-                            <span className="text-[10px] text-white/50">Select / Interact</span>
+                            <span className="font-bold text-white block">PINCH (Select)</span>
+                            <span className="text-[10px] text-white/50">Interact</span>
                         </div>
                         <button onClick={() => setActiveInfo("PINCH")} className="opacity-50 hover:opacity-100 hover:text-cyan-400">ⓘ</button>
                     </li>
 
-                    {/* GRAB (NEW) */}
+                    {/* GRAB */}
                     <li className="grid grid-cols-[20px_1fr_20px] items-center group">
                         <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
                         <div>
-                            <span className="font-bold text-white block">CLOSE FIST (GRAB)</span>
-                            <span className="text-[10px] text-white/50">Form Matter (Sphere)</span>
+                            <span className="font-bold text-white block">CLOSE FIST</span>
+                            <span className="text-[10px] text-white/50">Gravity Well</span>
                         </div>
                         <button onClick={() => setActiveInfo("GRAB")} className="opacity-50 hover:opacity-100 hover:text-cyan-400">ⓘ</button>
                     </li>
@@ -73,9 +74,19 @@ export const HUD: React.FC<HUDProps> = ({ logMessage }) => {
                         <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
                          <div>
                             <span className="font-bold text-white block">FLICK WRIST</span>
-                            <span className="text-[10px] text-white/50">Swipe Left/Right</span>
+                            <span className="text-[10px] text-white/50">Swipe Page</span>
                         </div>
                         <button onClick={() => setActiveInfo("FLICK")} className="opacity-50 hover:opacity-100 hover:text-cyan-400">ⓘ</button>
+                    </li>
+                    
+                    {/* DUAL HAND */}
+                    <li className="grid grid-cols-[20px_1fr_20px] items-center group">
+                        <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                         <div>
+                            <span className="font-bold text-white block">TWO HANDS</span>
+                            <span className="text-[10px] text-white/50">Energy Sphere</span>
+                        </div>
+                        <button onClick={() => setActiveInfo("DUAL")} className="opacity-50 hover:opacity-100 hover:text-cyan-400">ⓘ</button>
                     </li>
                 </ul>
             </div>
@@ -132,7 +143,7 @@ export const HUD: React.FC<HUDProps> = ({ logMessage }) => {
         </div>
 
         <div className="text-right">
-             <p className="text-[10px] text-white/40">AURA TERMINAL v0.2</p>
+             <p className="text-[10px] text-white/40">AURA TERMINAL v0.3</p>
              <p className="text-[10px] text-white/40">AETHERIS INTELLIGENCE</p>
         </div>
       </div>

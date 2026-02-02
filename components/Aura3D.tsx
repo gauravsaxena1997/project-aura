@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Ring } from '@react-three/drei';
 import * as THREE from 'three';
@@ -10,11 +10,11 @@ interface Aura3DProps {
 }
 
 // --- CONSTANTS ---
-const PARTICLE_COUNT = 600; // High density for "Cloud" look
-const HAND_RADIUS = 2.5; // Size of the repulsion field
-const DOT_SIZE = 0.025; // "Dot level" size
+const PARTICLE_COUNT = 800; // Increased density for Sphere effect
+const HAND_RADIUS = 2.5; 
+const DOT_SIZE = 0.02; 
 
-// --- 1. THE RIG (Always Visible Reference) ---
+// --- 1. THE RIG ---
 const SystemsCheckRing = () => {
     const ref = useRef<THREE.Group>(null);
     useFrame((state, delta) => {
@@ -32,36 +32,37 @@ const SystemsCheckRing = () => {
     )
 }
 
-// --- 2. THE PARTICLE ENGINE (Position Based Dynamics) ---
+// --- 2. THE PARTICLE ENGINE ---
 const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<HandTrackingState> }) => {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const { viewport } = useThree();
 
+  const [activeWind, setActiveWind] = useState<'left' | 'right' | 'none'>('none');
+  const windTimer = useRef<number | null>(null);
+
   // Initialize Particle Data
-  // We use "Home" positions to anchor the simulation, preventing chaos.
   const particles = useMemo(() => {
     const temp = [];
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-      // Full screen spread with slight depth variation
-      const x = (Math.random() - 0.5) * 15;
+      const x = (Math.random() - 0.5) * 16;
       const y = (Math.random() - 0.5) * 10;
-      const z = (Math.random() - 0.5) * 2; 
+      const z = (Math.random() - 0.5) * 4; 
 
-      // Sphere Formation Target (Pre-calculated for performance)
+      // Sphere Target (Unit Sphere)
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos((Math.random() * 2) - 1);
-      const r = 1.2; // Sphere radius
-
+      
       temp.push({ 
           home: new THREE.Vector3(x, y, z),
-          current: new THREE.Vector3(x, y, z), // Current position
-          sphereOffset: new THREE.Vector3( // Offset from hand center
-              r * Math.sin(phi) * Math.cos(theta),
-              r * Math.sin(phi) * Math.sin(theta),
-              r * Math.cos(phi)
+          current: new THREE.Vector3(x, y, z), 
+          sphereDir: new THREE.Vector3( 
+              Math.sin(phi) * Math.cos(theta),
+              Math.sin(phi) * Math.sin(theta),
+              Math.cos(phi)
           ),
-          phase: Math.random() * Math.PI * 2
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.02 + Math.random() * 0.05
       });
     }
     return temp;
@@ -70,139 +71,161 @@ const Particles = ({ handStateRef }: { handStateRef: React.MutableRefObject<Hand
   useFrame((state, delta) => {
     if (!mesh.current) return;
     
-    const { isFist, isPresent, indexTip } = handStateRef.current;
+    const { isFist, isPresent, indexTip, swipeDirection, isTwoHanded, handDistance, centerPoint } = handStateRef.current;
     const time = state.clock.getElapsedTime();
+
+    // --- GESTURE TRIGGER CHECKS ---
+    if (swipeDirection !== 'none') {
+        setActiveWind(swipeDirection);
+        if (windTimer.current) clearTimeout(windTimer.current);
+        windTimer.current = window.setTimeout(() => setActiveWind('none'), 600); 
+    }
     
-    // --- STEP 1: RESOLVE HAND POSITION ---
-    // We map 2D screen coords to 3D world coords.
-    // Default to "Far Away" if hand is missing so physics resets gracefully.
-    const handPos = new THREE.Vector3(1000, 1000, 0); 
-    
+    // --- MAP HAND POSITIONS ---
+    const primaryHandPos = new THREE.Vector3(1000, 1000, 0); 
     if (isPresent && indexTip) {
-        // COORDINATE MAPPING EXPLAINED:
-        // MediaPipe X: 0 (Left) -> 1 (Right)
-        // MediaPipe Y: 0 (Top)  -> 1 (Bottom)
-        // ThreeJS X: 0 is Center. -Width/2 is Left.
-        // ThreeJS Y: 0 is Center. +Height/2 is Top.
-        // MIRROR EFFECT: We mirror the video via CSS, so we must mirror logic here.
-        // Hand Real Right -> Screen Right -> MP x > 0.5 -> Three X > 0
-        
-        // Formula: (0.5 - rawX) * viewportWidth
-        // If x=0.8 (Right side): (0.5 - 0.8) = -0.3. Wait? 
-        // Let's use standard non-mirrored mapping and let the brain adjust, 
-        // OR match the CSS scaleX(-1). 
-        // If CSS flips video, a hand on the right of the frame (MP x=0.8) appears on the LEFT.
-        // BUT we want the aura to follow the hand. 
-        // If I raise my Right hand, it shows on Right side of screen (Mirror).
-        // That means camera sees it on Left side (x=0.2).
-        // So x=0.2 needs to map to Positive X.
-        // (0.5 - 0.2) * width = 0.3 * width = Positive. Correct.
-        
-        const x = (0.5 - indexTip.x) * viewport.width;
-        const y = (0.5 - indexTip.y) * viewport.height;
-        
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-            handPos.set(x, y, 0);
-        }
+        primaryHandPos.set(
+            (0.5 - indexTip.x) * viewport.width,
+            (0.5 - indexTip.y) * viewport.height,
+            0
+        );
     }
 
-    // --- STEP 2: UPDATE PARTICLES ---
+    const dualHandCenter = new THREE.Vector3(0,0,0);
+    if (isTwoHanded && centerPoint) {
+        dualHandCenter.set(
+            (0.5 - centerPoint.x) * viewport.width,
+            (0.5 - centerPoint.y) * viewport.height,
+            0
+        );
+    }
+
+    // --- UPDATE PARTICLES ---
     particles.forEach((p, i) => {
         let target = new THREE.Vector3();
+        let scale = 1.0;
+        let colorOverride = false;
 
-        if (isFist && isPresent) {
-            // MODE: ATTRACT (Sphere)
-            // Target is Hand Position + Sphere Offset
-            target.copy(handPos).add(p.sphereOffset);
+        // MODE 1: DUAL HAND ENERGY SPHERE
+        if (isTwoHanded && centerPoint) {
+            // Dynamic Radius based on hand distance
+            // handDistance is approx 0.1 (close) to 0.8 (far)
+            // Map to World Units: 1.0 to 6.0
+            const sphereRadius = Math.max(1.5, handDistance * 8); 
             
-            // Add a swirl effect
-            const swirlX = Math.sin(time * 3 + p.phase) * 0.1;
-            const swirlY = Math.cos(time * 3 + p.phase) * 0.1;
-            target.x += swirlX;
-            target.y += swirlY;
+            // Calculate target on sphere surface
+            target.copy(dualHandCenter).add(p.sphereDir.clone().multiplyScalar(sphereRadius));
+            
+            // Add high-energy vibration
+            target.x += (Math.random() - 0.5) * 0.2;
+            target.y += (Math.random() - 0.5) * 0.2;
+            
+            // Particles rotate around center
+            const rotSpeed = 2.0;
+            const x = target.x - dualHandCenter.x;
+            const z = target.z - dualHandCenter.z;
+            target.x = dualHandCenter.x + x * Math.cos(delta * rotSpeed) - z * Math.sin(delta * rotSpeed);
+            target.z = dualHandCenter.z + x * Math.sin(delta * rotSpeed) + z * Math.cos(delta * rotSpeed);
 
-        } else {
-            // MODE: IDLE + REPEL
-            // 1. Start with Home Position
+            colorOverride = true; // Mark for Gold color
+        } 
+        // MODE 2: SINGLE HAND GRAB (Gravity Well)
+        else if (isFist && isPresent) {
+            target.copy(primaryHandPos).add(p.sphereDir.clone().multiplyScalar(1.2));
+            scale = 0.6;
+        } 
+        // MODE 3: IDLE / HOVER
+        else {
             target.copy(p.home);
+            target.y += Math.sin(time + p.phase) * 0.1;
 
-            // 2. Add "Breathing" animation
-            target.y += Math.sin(time + p.phase) * 0.05;
-
-            // 3. Calculate Repulsion (Displacement)
             if (isPresent) {
-                const dist = target.distanceTo(handPos);
-                
-                // If hand is overlapping the particle's home...
+                const dist = target.distanceTo(primaryHandPos);
                 if (dist < HAND_RADIUS) {
-                    // Calculate vector from Hand -> Home
-                    const pushDir = new THREE.Vector3().subVectors(target, handPos).normalize();
-                    
-                    // Push it out exactly to the edge of the radius
-                    // This is "Displacement", not "Force". It is stable.
+                    const pushDir = new THREE.Vector3().subVectors(target, primaryHandPos).normalize();
                     const pushDist = HAND_RADIUS - dist;
                     target.add(pushDir.multiplyScalar(pushDist));
                 }
             }
         }
 
-        // --- STEP 3: INTERPOLATE (Smooth Movement) ---
-        // Lerp factor controls "lag" or "weight". Higher = snappier.
-        const lerpFactor = isFist ? 0.1 : 0.15;
+        // --- APPLY WIND FORCE (FLICK) ---
+        if (activeWind === 'left') {
+            target.x -= 8; // Stronger push
+            scale = 0.5; // Stretch effect simulated by shrinking width visual perception
+        } else if (activeWind === 'right') {
+            target.x += 8;
+            scale = 0.5;
+        }
+
+        // --- INTERPOLATION ---
+        const lerpFactor = activeWind !== 'none' ? 0.05 : (isTwoHanded ? 0.1 : 0.12);
         p.current.lerp(target, lerpFactor);
 
-        // --- STEP 4: RENDER ---
+        // --- MATRIX UPDATE ---
         dummy.position.copy(p.current);
         
-        // Scale logic:
-        // Fist = Small condensed dots (0.6x)
-        // Idle = Normal dots (1.0x)
-        const scale = isFist ? 0.6 : 1.0;
-        dummy.scale.setScalar(scale);
-        
+        // Scale Y for "Motion Blur" streak effect during wind
+        if (activeWind !== 'none') {
+            dummy.scale.set(3, 0.2, 1); 
+            dummy.rotation.z = Math.PI / 2; // Horizontal streak
+        } else {
+            dummy.scale.setScalar(scale);
+            dummy.rotation.set(0,0,0);
+        }
+
         dummy.updateMatrix();
         mesh.current.setMatrixAt(i, dummy.matrix);
+        
+        // Update Color (InstancedMesh color requires custom shader or iterating instanceColor, 
+        // for simplicity in this Phase 0, we stick to global material color or rely on blending)
+        // Note: Changing individual instance color in standard Three.js requires setting instanceColor buffer.
+        // For now, we use geometry scaling to indicate state.
     });
     
     mesh.current.instanceMatrix.needsUpdate = true;
+    
+    // Dynamic Material Color
+    if (mesh.current.material instanceof THREE.MeshBasicMaterial) {
+        if (isTwoHanded) mesh.current.material.color.setHex(0xffaa00); // Gold for Energy Sphere
+        else if (activeWind !== 'none') mesh.current.material.color.setHex(0xffffff); // White for Wind
+        else mesh.current.material.color.setHex(0x22d3ee); // Cyan default
+    }
   });
 
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, PARTICLE_COUNT]}>
       <sphereGeometry args={[DOT_SIZE, 8, 8]} />
       <meshBasicMaterial 
-        color="#22d3ee" // Cyan
+        color="#22d3ee"
         transparent
         opacity={0.8}
         blending={THREE.AdditiveBlending}
-        depthTest={false} // CRITICAL: Renders on top of everything, preventing Z-clipping
+        depthTest={false} 
       />
     </instancedMesh>
   );
 };
 
-// --- 3. THE RETICLE (Feedback UI) ---
+// --- 3. THE RETICLE ---
 const Reticle = ({ handStateRef }: { handStateRef: React.MutableRefObject<HandTrackingState> }) => {
     const ref = useRef<THREE.Group>(null);
     const { viewport } = useThree();
 
     useFrame(() => {
         if (!ref.current) return;
-        const { isPresent, indexTip, isPinching, isFist } = handStateRef.current;
+        const { isPresent, indexTip, isPinching, isFist, isTwoHanded } = handStateRef.current;
 
-        if (isPresent && indexTip) {
-            // Same coordinate math as particles
+        // Hide reticle if using two hands (visuals are handled by particles)
+        if (isPresent && indexTip && !isTwoHanded) {
             const x = (0.5 - indexTip.x) * viewport.width;
             const y = (0.5 - indexTip.y) * viewport.height;
             
-            // Smooth follow
             ref.current.position.lerp(new THREE.Vector3(x, y, 0), 0.4);
             ref.current.visible = true;
             
-            // Visual State
             const scale = isFist ? 0.5 : (isPinching ? 0.8 : 1);
             ref.current.scale.setScalar(scale);
-
         } else {
             ref.current.visible = false;
         }
@@ -210,12 +233,10 @@ const Reticle = ({ handStateRef }: { handStateRef: React.MutableRefObject<HandTr
 
     return (
         <group ref={ref}>
-            {/* Inner Dot */}
             <mesh>
                 <sphereGeometry args={[0.03, 16, 16]} />
                 <meshBasicMaterial color="white" blending={THREE.AdditiveBlending} depthTest={false} />
             </mesh>
-            {/* Outer Ring */}
             <Ring args={[0.1, 0.11, 32]}>
                 <meshBasicMaterial color="#22d3ee" transparent opacity={0.5} blending={THREE.AdditiveBlending} depthTest={false} />
             </Ring>

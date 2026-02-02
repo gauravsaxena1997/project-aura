@@ -17,7 +17,7 @@ export class MediaPipeService {
       });
 
       this.instance.setOptions({
-        maxNumHands: 1,
+        maxNumHands: 2, // UPGRADED: Enable Dual Hand Tracking
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,

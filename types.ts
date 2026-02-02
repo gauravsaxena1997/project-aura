@@ -11,11 +11,19 @@ export interface HandLandmarkResult {
 }
 
 export interface HandTrackingState {
+  // Primary Hand (Single interaction)
   indexTip: Landmark | null;
   thumbTip: Landmark | null;
   wrist: Landmark | null;
+  
+  // Dual Hand Data (New)
+  isTwoHanded: boolean;
+  handDistance: number; // Distance between hands (0.0 to 1.0)
+  centerPoint: { x: number, y: number } | null; // Midpoint between hands
+
+  // Gestures
   isPinching: boolean;
-  isFist: boolean; // New state for Grab gesture
+  isFist: boolean;
   isPresent: boolean;
   swipeDirection: 'left' | 'right' | 'none';
 }
