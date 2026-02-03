@@ -121,6 +121,12 @@ export const useObjectManager = ({ maxObjects = 5 }: UseObjectManagerProps = {})
         }));
     }, []);
 
+    // Remove specific object
+    const removeObject = useCallback((id: string) => {
+        setObjects(prev => prev.filter(obj => obj.id !== id));
+        console.log(`[Objects] 🗑️ Removed object: ${id}`);
+    }, []);
+
     return {
         objects,
         spawnObject,
@@ -130,5 +136,6 @@ export const useObjectManager = ({ maxObjects = 5 }: UseObjectManagerProps = {})
         releaseObject,
         updateGrabbedPosition,
         setObjectColor,
+        removeObject,
     };
 };

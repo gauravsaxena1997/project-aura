@@ -66,7 +66,8 @@ const App: React.FC = () => {
     grabObject,
     releaseObject,
     updateGrabbedPosition,
-    setObjectColor // NEW: Enhanced capability
+    setObjectColor, // NEW: Enhanced capability
+    removeObject // NEW: Deletion capability
   } = useObjectManager({ maxObjects: 3 });
 
   // CRITICAL: Use priority hook as single source of truth for gesture decisions
@@ -87,21 +88,52 @@ const App: React.FC = () => {
     const command = transcript.toLowerCase().trim();
 
     // 1. OBJECT MANAGEMENT COMMANDS
-    if (command.includes('create') && command.includes('object')) {
-      if (objects.length >= 3) {
-        handleGesture("MAX OBJECTS REACHED (3/3)");
+
+    // Deletion (Check first to avoid conflict with creation if phrasing overlaps)
+    if (command.includes('clear') || command.includes('remove') || command.includes('delete')) {
+      // Global Delete
+      if (command.includes('all')) {
+        clearObjects();
+        handleGesture("ALL OBJECTS REMOVED");
         return;
       }
-      spawnObject();
-      handleGesture(`OBJECT CREATED (${objects.length + 1}/3)`);
-      return;
+
+      // Context-Aware Delete (High Priority)
+      if (priority >= 100 && grabbedObj) {
+        // User said "remove this" / "remove object" while holding one
+        removeObject(grabbedObj.id);
+        handleGesture("OBJECT REMOVED");
+        return;
+      } else {
+        // Fallback for "remove object" without context
+        handleGesture("GRAB OBJECT TO REMOVE");
+        return;
+      }
     }
 
-    if ((command.includes('clear') || command.includes('remove')) &&
-      (command.includes('object') || command.includes('all'))) {
-      clearObjects();
-      handleGesture("ALL OBJECTS REMOVED");
-      return;
+    // Creation
+    if (command.includes('create') || command.includes('add') || command.includes('spawn')) {
+      if (command.includes('object')) {
+        // Parse quantity: "one", "two", "three", "1", "2", "3"
+        let count = 1;
+        if (command.includes('two') || command.includes('2')) count = 2;
+        if (command.includes('three') || command.includes('3')) count = 3;
+
+        // Check limits
+        if (objects.length + count > 3) {
+          handleGesture(`MAX LIMIT REACHED (3 TOTAL)`);
+          return;
+        }
+
+        // Spawn loop
+        for (let i = 0; i < count; i++) {
+          // Small delay to prevent stacking exact positions (though randomizer handles this mostly)
+          setTimeout(() => spawnObject(), i * 100);
+        }
+
+        handleGesture(count > 1 ? `${count} OBJECTS CREATED` : "OBJECT CREATED");
+        return;
+      }
     }
 
     // 2. COLOR COMMANDS (PRIORITY AWARE)
@@ -125,7 +157,7 @@ const App: React.FC = () => {
         return;
       }
     }
-  }, [spawnObject, clearObjects, handleGesture, setBaseColor, setPulseTrigger, objects.length, priority, grabbedObj, setObjectColor]);
+  }, [spawnObject, clearObjects, handleGesture, setBaseColor, setPulseTrigger, objects.length, priority, grabbedObj, setObjectColor, removeObject]);
 
   // Create stable ref for voice handler to prevent re-initialization
   const handleVoiceCommandRef = useRef(handleVoiceCommand);
