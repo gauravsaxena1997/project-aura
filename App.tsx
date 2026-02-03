@@ -65,7 +65,8 @@ const App: React.FC = () => {
     updateHover,
     grabObject,
     releaseObject,
-    updateGrabbedPosition
+    updateGrabbedPosition,
+    setObjectColor // NEW: Enhanced capability
   } = useObjectManager({ maxObjects: 3 });
 
   // CRITICAL: Use priority hook as single source of truth for gesture decisions
@@ -77,20 +78,16 @@ const App: React.FC = () => {
 
   // --- VOICE COMMAND HANDLERS ---
   const handleColorCommand = useCallback((color: string) => {
+    // Legacy support wrapper
     const hex = COLOR_MAP[color];
-    if (hex) {
-      setBaseColor(hex);
-      setPulseTrigger(prev => prev + 1);
-      handleGesture(`COLOR >> ${color.toUpperCase()}`);
-    }
-  }, [handleGesture]);
+    if (hex) setBaseColor(hex);
+  }, []);
 
   const handleVoiceCommand = useCallback((transcript: string) => {
     const command = transcript.toLowerCase().trim();
 
-    // Check for object commands
+    // 1. OBJECT MANAGEMENT COMMANDS
     if (command.includes('create') && command.includes('object')) {
-      // Check max limit
       if (objects.length >= 3) {
         handleGesture("MAX OBJECTS REACHED (3/3)");
         return;
@@ -100,7 +97,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Accept multiple phrasings: "clear objects", "remove all objects", "remove all object"
     if ((command.includes('clear') || command.includes('remove')) &&
       (command.includes('object') || command.includes('all'))) {
       clearObjects();
@@ -108,16 +104,28 @@ const App: React.FC = () => {
       return;
     }
 
-    // Check for color commands
+    // 2. COLOR COMMANDS (PRIORITY AWARE)
     for (const [colorName, hex] of Object.entries(COLOR_MAP)) {
       if (command.includes(colorName)) {
-        setBaseColor(hex);
-        setPulseTrigger(prev => prev + 1);
-        handleGesture(`COLOR >> ${colorName.toUpperCase()}`);
+
+        // PRIORITY CHECK: Resolve intent based on context
+        // Priority 100 = GRAB (Focus context)
+        // Priority < 100 = IDLE/GESTURE (Ambient context)
+
+        if (priority >= 100 && grabbedObj) {
+          // 🎯 Context: Focused Object
+          setObjectColor(grabbedObj.id, hex);
+          handleGesture(`COLOR >> ${colorName.toUpperCase()} (OBJECT)`);
+        } else {
+          // 🌍 Context: Environment
+          setBaseColor(hex);
+          setPulseTrigger(prev => prev + 1);
+          handleGesture(`COLOR >> ${colorName.toUpperCase()} (ENV)`);
+        }
         return;
       }
     }
-  }, [spawnObject, clearObjects, handleGesture, setBaseColor, setPulseTrigger, objects.length]);
+  }, [spawnObject, clearObjects, handleGesture, setBaseColor, setPulseTrigger, objects.length, priority, grabbedObj, setObjectColor]);
 
   // Create stable ref for voice handler to prevent re-initialization
   const handleVoiceCommandRef = useRef(handleVoiceCommand);

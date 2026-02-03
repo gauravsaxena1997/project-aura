@@ -110,6 +110,17 @@ export const useObjectManager = ({ maxObjects = 5 }: UseObjectManagerProps = {})
         }));
     }, []);
 
+    // Set specific object color
+    const setObjectColor = useCallback((id: string, color: string) => {
+        setObjects(prev => prev.map(obj => {
+            if (obj.id === id) {
+                console.log(`[Objects] 🎨 Color updated for ${id}: ${color}`);
+                return { ...obj, color };
+            }
+            return obj;
+        }));
+    }, []);
+
     return {
         objects,
         spawnObject,
@@ -118,5 +129,6 @@ export const useObjectManager = ({ maxObjects = 5 }: UseObjectManagerProps = {})
         grabObject,
         releaseObject,
         updateGrabbedPosition,
+        setObjectColor,
     };
 };
