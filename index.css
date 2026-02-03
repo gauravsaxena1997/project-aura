@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Custom styles for Aura Terminal */
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Roboto Mono', monospace;
+}
+
+/* Custom scrollbar hiding if needed */
+::-webkit-scrollbar {
+  display: none;
+}
