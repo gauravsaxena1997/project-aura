@@ -51,28 +51,24 @@ export const Aura3D = ({ handStateRef, pulseTrigger, baseColor, objects, objectM
             objectManager.updateGrabbedPosition(handWorldPos);
         }
 
-        // Detect pinch transitions
+        // --- 1. PINCH LOGIC (GRAB) ---
         const isPinchingNow = handState.isPinching;
         const wasPinching = prevPinchRef.current;
 
         if (isPinchingNow && !wasPinching) {
-            // Pinch just started → Grab hovered object
-            objectManager.grabObject(handWorldPos);
+            // Pinch just started → Check for object grab
+            const hoveredObject = objects.find(obj => obj.isHovered);
+            if (hoveredObject) {
+                objectManager.grabObject(handWorldPos);
+            }
         } else if (!isPinchingNow && wasPinching) {
-            // DEBUG: Log the activeGesture value
-            console.log(`[Objects] 🔍 Release triggered - activeGesture: "${activeGesture}", isTwoHanded: ${handState.isTwoHanded}`);
-
-            // CRITICAL FIX: Only block release if two hands are detected
-            // This prevents release when second hand appears (hand array reorders)
-            // But allows release when user actually stops pinching with one hand
+            // Release logic
             if (handState.isTwoHanded && activeGesture === 'grab') {
                 console.log('[Objects] 🛡️ Release blocked - two hands detected, grab still active');
             } else {
-                console.log('[Objects] ✓ Releasing object (legitimate release)');
                 objectManager.releaseObject();
             }
         }
-
         prevPinchRef.current = isPinchingNow;
     });
 

@@ -9,9 +9,11 @@ interface HUDProps {
     onRetryMic?: () => void;
     objectCount: number;
     activeGesture: string;
+    clickCount: number;
+    clickSource: 'tap' | 'blink' | null;
 }
 
-export const HUD: React.FC<HUDProps> = ({ logMessage, isListening, isSystemListening, error, onRetryMic, objectCount, activeGesture }) => {
+export const HUD: React.FC<HUDProps> = ({ logMessage, isListening, isSystemListening, error, onRetryMic, objectCount, activeGesture, clickCount, clickSource }) => {
     const [time, setTime] = useState('');
     const [activeInfo, setActiveInfo] = useState<string | null>(null);
 
@@ -146,6 +148,14 @@ export const HUD: React.FC<HUDProps> = ({ logMessage, isListening, isSystemListe
                     <div className="bg-white/5 backdrop-blur-md border border-white/10 px-4 py-2 rounded-sm shadow-lg">
                         <p className="text-[10px] text-white/50">
                             OBJECTS: <span className="text-cyan-400 font-bold">{objectCount}/3</span>
+                        </p>
+                    </div>
+                    <div className="bg-white/5 backdrop-blur-md border border-white/10 px-4 py-2 rounded-sm shadow-lg">
+                        <p className="text-[10px] text-white/50">
+                            CLICK_COUNT: <span className="text-green-400 font-bold">{clickCount}</span>
+                            {clickSource && (
+                                <span className="text-cyan-400 ml-2">({clickSource.toUpperCase()})</span>
+                            )}
                         </p>
                     </div>
                 </div>

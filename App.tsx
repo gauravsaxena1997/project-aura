@@ -3,9 +3,11 @@ import { Canvas } from '@react-three/fiber';
 import { VideoBackground } from './components/VideoBackground';
 import { Aura3D } from './components/Aura3D';
 import { HUD } from './components/HUD';
+import { InteractionController } from './components/InteractionController';
 import { useVoiceCommand } from './hooks/useVoiceCommand';
 import { useObjectManager } from './hooks/useObjectManager';
 import { useGesturePriority } from './hooks/useGesturePriority';
+import { useClickSystem } from './hooks/useClickSystem';
 import { HandTrackingState } from './types';
 
 // Neon/Cyberpunk Color Palette Map
@@ -35,6 +37,7 @@ const App: React.FC = () => {
     handDistance: 0,
     centerPoint: null,
     isPinching: false,
+    isTapping: false,
     isFist: false,
     isPresent: false,
     swipeDirection: 'none',
@@ -44,6 +47,10 @@ const App: React.FC = () => {
   const [pulseTrigger, setPulseTrigger] = useState(0);
   const [baseColor, setBaseColor] = useState("#22d3ee");
   const [logMessage, setLogMessage] = useState("");
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+
+  // NEW: Centralized Click System
+  const { clickState, triggerInteraction } = useClickSystem();
 
   const logTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPinchRef = useRef(false); // Track previous pinch state
@@ -66,24 +73,18 @@ const App: React.FC = () => {
     grabObject,
     releaseObject,
     updateGrabbedPosition,
-    setObjectColor, // NEW: Enhanced capability
-    removeObject // NEW: Deletion capability
+    setObjectColor,
+    removeObject
   } = useObjectManager({ maxObjects: 3 });
 
   // CRITICAL: Use priority hook as single source of truth for gesture decisions
   const grabbedObj = objects.find(obj => obj.isGrabbed);
-  const { activeGesture, priority, shouldAllowGesture } = useGesturePriority(
+  const { activeGesture, priority } = useGesturePriority(
     handStateRef,
     grabbedObj?.id || null
   );
 
   // --- VOICE COMMAND HANDLERS ---
-  const handleColorCommand = useCallback((color: string) => {
-    // Legacy support wrapper
-    const hex = COLOR_MAP[color];
-    if (hex) setBaseColor(hex);
-  }, []);
-
   const handleVoiceCommand = useCallback((transcript: string) => {
     const command = transcript.toLowerCase().trim();
 
@@ -183,19 +184,30 @@ const App: React.FC = () => {
       console.log(`[DEV] Running command: "${command}"`);
       handleVoiceCommandRef.current(command);
     };
-    console.log('[DEV] Debug utility ready! Use: window.runCommand("create object")');
 
     return () => {
       delete (window as any).runCommand;
     };
-  }, []); // Empty deps - runs once, uses ref
+  }, []);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
       {/* Layer 1: Video Background */}
       <div className="absolute inset-0 z-[1]">
-        <VideoBackground handStateRef={handStateRef} onGesture={handleGesture} />
+        <VideoBackground
+          handStateRef={handStateRef}
+          onGesture={handleGesture}
+          onVideoReady={setVideoElement}
+        />
       </div>
+
+      {/* Layer 1.5: Interaction Controller (Logic Layer) */}
+      <InteractionController
+        handStateRef={handStateRef}
+        videoElement={videoElement}
+        onTrigger={triggerInteraction}
+        onGesture={handleGesture}
+      />
 
       {/* Layer 2: 3D Scene */}
       <div className="absolute inset-0 z-[5] pointer-events-none">
@@ -227,6 +239,8 @@ const App: React.FC = () => {
           onRetryMic={startListening}
           objectCount={objects.length}
           activeGesture={activeGesture}
+          clickCount={clickState.count}
+          clickSource={clickState.source}
         />
       </div>
     </div>

@@ -5,9 +5,10 @@ import { HandTrackingState, HandLandmarkResult } from '../types';
 interface VideoBackgroundProps {
     handStateRef: React.MutableRefObject<HandTrackingState>;
     onGesture: (gesture: string) => void;
+    onVideoReady?: (video: HTMLVideoElement) => void;
 }
 
-export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, onGesture }) => {
+export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, onGesture, onVideoReady }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const requestRef = useRef<number>(0);
     const isProcessing = useRef<boolean>(false);
@@ -15,6 +16,7 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
     // Logic Refs
     const swipeCooldown = useRef<boolean>(false);
     const wasPinching = useRef<boolean>(false);
+    const prevTapRef = useRef<boolean>(false); // Used in aura3d for logic, but here we track state
     const wasFist = useRef<boolean>(false);
     const wasTwoHanded = useRef<boolean>(false);
 
@@ -23,30 +25,6 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
 
     useEffect(() => {
         let hands: any = null;
-
-        const startCamera = async () => {
-            if (!videoRef.current) return;
-
-            try {
-                hands = MediaPipeService.getInstance();
-                hands.onResults(onResults);
-
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720, facingMode: 'user' }
-                });
-
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.onloadeddata = () => {
-                        videoRef.current?.play();
-                        processFrame();
-                    };
-                }
-            } catch (err) {
-                console.error(err);
-                onGesture("ERROR: CAM_FAIL");
-            }
-        };
 
         const onResults = (results: any) => {
             isProcessing.current = false;
@@ -92,7 +70,24 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
 
                 // --- 2. SINGLE HAND GESTURES ---
                 const pinchDist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
-                const isPinching = pinchDist < 0.05;
+                const isPinching = pinchDist < 0.05; // Tip-to-Tip (Grab)
+
+                // NEW: Tap Gesture (Thumb to Index Side - Contact Zone)
+                // Check distance to multiple points along the index finger
+                const indexMCP = hand1[5]; // Base knuckle
+                const indexPIP = hand1[6]; // Middle joint
+                const indexDIP = hand1[7]; // Upper joint
+
+                const distToMCP = Math.hypot(indexMCP.x - thumbTip.x, indexMCP.y - thumbTip.y);
+                const distToPIP = Math.hypot(indexPIP.x - thumbTip.x, indexPIP.y - thumbTip.y);
+                const distToDIP = Math.hypot(indexDIP.x - thumbTip.x, indexDIP.y - thumbTip.y);
+
+                // Find closest point of contact
+                const minTapDist = Math.min(distToMCP, distToPIP, distToDIP);
+
+                // Allow tap if close enough to ANY point on side, but NOT if pinching (grabbing)
+                // Threshold 0.06 allows for "side" contact which is further than "center" contact
+                const isTapping = minTapDist < 0.06 && !isPinching;
 
                 const fingerDist = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y);
                 const isFist = fingerDist < 0.15;
@@ -134,6 +129,7 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
                     thumbTip,
                     wrist,
                     isPinching,
+                    isTapping, // Add new state
                     isFist,
                     isTwoHanded,
                     handDistance,
@@ -169,6 +165,35 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
             requestRef.current = requestAnimationFrame(processFrame);
         };
 
+        const startCamera = async () => {
+            if (!videoRef.current) return;
+
+            try {
+                hands = MediaPipeService.getInstance();
+                hands.onResults(onResults);
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720, facingMode: 'user' }
+                });
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.onloadeddata = () => {
+                        videoRef.current?.play();
+                        processFrame();
+
+                        // NEW callback call
+                        if (onVideoReady && videoRef.current) {
+                            onVideoReady(videoRef.current);
+                        }
+                    };
+                }
+            } catch (err) {
+                console.error(err);
+                onGesture("ERROR: CAM_FAIL");
+            }
+        };
+
         startCamera();
 
         return () => {
@@ -177,7 +202,7 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
                 (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
             }
         };
-    }, [handStateRef, onGesture]);
+    }, [handStateRef, onGesture, onVideoReady]);
 
     return (
         <video
