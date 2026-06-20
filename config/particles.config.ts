@@ -43,12 +43,27 @@ export const PARTICLE_ANIMATION = {
     // Lerp factor during dual hand
     DUAL_HAND_LERP_FACTOR: 0.15,
 
+    // Lerp factor during single hand fist sphere
+    FIST_LERP_FACTOR: 0.14,
+
     // Idle wave amplitude
     IDLE_WAVE_AMPLITUDE: 0.1,
 
     // Dual hand rotation speed
-    DUAL_HAND_ROTATION_SPEED: 3.0,
+    DUAL_HAND_ROTATION_SPEED: 4.5,
 
     // Dual hand sphere radius multiplier (relative to hand distance)
-    DUAL_HAND_SPHERE_RADIUS: 0.35
+    DUAL_HAND_SPHERE_RADIUS: 0.35,
+
+    // Additional front/back driven sphere spin for dual hand mode
+    DUAL_HAND_DEPTH_ROTATION_FACTOR: 28.0,
+    DUAL_HAND_DEPTH_ROTATION_SPEED: 16.0,
+
+    // Single hand fist sphere radius in world units
+    FIST_SPHERE_RADIUS: 1.6,
+
+    // Stable one-hand energy oscillation
+    FIST_JITTER_AMPLITUDE: 0.08,
+    FIST_JITTER_FREQUENCY: 2.4,
+    FIST_ROTATION_SPEED: 1.8
 } as const;

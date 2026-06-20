@@ -38,6 +38,8 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
                 // --- DATA EXTRACTION ---
                 const hand1 = res.multiHandLandmarks[0];
                 const hand2 = res.multiHandLandmarks.length > 1 ? res.multiHandLandmarks[1] : null;
+                const worldHand1 = res.multiHandWorldLandmarks?.[0] ?? null;
+                const worldHand2 = res.multiHandWorldLandmarks?.[1] ?? null;
 
                 // Primary Hand (Hand 1)
                 const wrist = hand1[0];
@@ -50,6 +52,7 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
                 let isTwoHanded = false;
                 let handDistance = 0;
                 let centerPoint = null;
+                let handDepthDelta = 0;
 
                 if (hand2) {
                     isTwoHanded = true;
@@ -63,6 +66,14 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
                         x: (wrist.x + wrist2.x) / 2,
                         y: (wrist.y + wrist2.y) / 2
                     };
+
+                    // Prefer world-space wrist depth when available; it is a stronger signal
+                    // for front/back hand motion than normalized screen-space landmarks.
+                    if (worldHand1 && worldHand2) {
+                        handDepthDelta = worldHand1[0].z - worldHand2[0].z;
+                    } else {
+                        handDepthDelta = wrist.z - wrist2.z;
+                    }
 
                     if (!wasTwoHanded.current) onGesture("DUAL HAND SYNC");
                 }
@@ -134,6 +145,7 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
                     isTwoHanded,
                     handDistance,
                     centerPoint,
+                    handDepthDelta,
                     isPresent: true,
                     swipeDirection: currentSwipeDir
                 };
@@ -148,6 +160,7 @@ export const VideoBackground: React.FC<VideoBackgroundProps> = ({ handStateRef, 
             } else {
                 handStateRef.current.isPresent = false;
                 handStateRef.current.isTwoHanded = false;
+                handStateRef.current.handDepthDelta = 0;
                 wristHistory.current = [];
             }
         };

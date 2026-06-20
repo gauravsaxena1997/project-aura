@@ -25,6 +25,7 @@ export const Particles: React.FC<ParticlesProps> = ({ handStateRef, baseColor, a
     const mesh = useRef<THREE.InstancedMesh>(null);
     const dummy = useMemo(() => new THREE.Object3D(), []);
     const { viewport } = useThree();
+    const depthSpinRef = useRef(0);
 
     const [activeWind, setActiveWind] = useState<'left' | 'right' | 'none'>('none');
     const windTimer = useRef<number | null>(null);
@@ -59,8 +60,14 @@ export const Particles: React.FC<ParticlesProps> = ({ handStateRef, baseColor, a
     useFrame((state, delta) => {
         if (!mesh.current) return;
 
-        const { isFist, isPresent, indexTip, swipeDirection, isTwoHanded, handDistance, centerPoint } = handStateRef.current;
+        const { isFist, isPresent, indexTip, swipeDirection, isTwoHanded, handDistance, centerPoint, handDepthDelta } = handStateRef.current;
         const time = state.clock.getElapsedTime();
+
+        if (isTwoHanded && centerPoint) {
+            depthSpinRef.current += handDepthDelta * PARTICLE_ANIMATION.DUAL_HAND_DEPTH_ROTATION_SPEED * delta;
+        } else {
+            depthSpinRef.current *= 0.9;
+        }
 
         // --- GESTURE TRIGGER CHECKS ---
         if (swipeDirection !== 'none') {
@@ -132,8 +139,13 @@ export const Particles: React.FC<ParticlesProps> = ({ handStateRef, baseColor, a
                 // 2. Set Radius to be roughly 35-40% of the gap (so Diameter is 70-80%)
                 const sphereRadius = Math.max(0.5, worldGap * PARTICLE_ANIMATION.DUAL_HAND_SPHERE_RADIUS);
 
+                const rotatedSphereDir = p.sphereDir.clone().applyAxisAngle(
+                    new THREE.Vector3(0, 1, 0),
+                    depthSpinRef.current + (handDepthDelta * PARTICLE_ANIMATION.DUAL_HAND_DEPTH_ROTATION_FACTOR)
+                );
+
                 // Calculate target on sphere surface
-                target.copy(dualHandCenter).add(p.sphereDir.clone().multiplyScalar(sphereRadius));
+                target.copy(dualHandCenter).add(rotatedSphereDir.multiplyScalar(sphereRadius));
 
                 // Add high-energy vibration
                 const jitter = 0.05 + (handDistance * 0.1);
@@ -151,7 +163,22 @@ export const Particles: React.FC<ParticlesProps> = ({ handStateRef, baseColor, a
             }
             // MODE 2: SINGLE HAND GRAB (Gravity Well)
             else if (isFist && isPresent) {
-                target.copy(primaryHandPos).add(p.sphereDir.clone().multiplyScalar(0.8)); // Tighter grab radius
+                target.copy(primaryHandPos).add(
+                    p.sphereDir.clone().multiplyScalar(PARTICLE_ANIMATION.FIST_SPHERE_RADIUS)
+                );
+
+                const fistPulse = PARTICLE_ANIMATION.FIST_JITTER_AMPLITUDE * (
+                    0.65
+                    + 0.35 * Math.sin((time * PARTICLE_ANIMATION.FIST_JITTER_FREQUENCY) + p.phase)
+                );
+                target.addScaledVector(p.sphereDir, fistPulse);
+
+                const localX = target.x - primaryHandPos.x;
+                const localZ = target.z - primaryHandPos.z;
+                const fistRotation = delta * PARTICLE_ANIMATION.FIST_ROTATION_SPEED;
+                target.x = primaryHandPos.x + localX * Math.cos(fistRotation) - localZ * Math.sin(fistRotation);
+                target.z = primaryHandPos.z + localX * Math.sin(fistRotation) + localZ * Math.cos(fistRotation);
+
                 scale = 0.6;
             }
             // MODE 3: IDLE / HOVER
@@ -179,7 +206,13 @@ export const Particles: React.FC<ParticlesProps> = ({ handStateRef, baseColor, a
             }
 
             // --- INTERPOLATION ---
-            const lerpFactor = activeWind !== 'none' ? PARTICLE_ANIMATION.WIND_LERP_FACTOR : (isTwoHanded ? PARTICLE_ANIMATION.DUAL_HAND_LERP_FACTOR : PARTICLE_ANIMATION.LERP_FACTOR);
+            const lerpFactor = activeWind !== 'none'
+                ? PARTICLE_ANIMATION.WIND_LERP_FACTOR
+                : isTwoHanded
+                    ? PARTICLE_ANIMATION.DUAL_HAND_LERP_FACTOR
+                    : isFist
+                        ? PARTICLE_ANIMATION.FIST_LERP_FACTOR
+                        : PARTICLE_ANIMATION.LERP_FACTOR;
             p.current.lerp(target, lerpFactor);
 
             // --- MATRIX UPDATE ---

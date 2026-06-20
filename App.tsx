@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { VideoBackground } from './components/VideoBackground';
 import { Aura3D } from './components/Aura3D';
 import { HUD } from './components/HUD';
+import { InformationCarousel } from './components/InformationCarousel';
 import { InteractionController } from './components/InteractionController';
 import { useVoiceCommand } from './hooks/useVoiceCommand';
 import { useObjectManager } from './hooks/useObjectManager';
@@ -36,6 +37,7 @@ const App: React.FC = () => {
     isTwoHanded: false,
     handDistance: 0,
     centerPoint: null,
+    handDepthDelta: 0,
     isPinching: false,
     isTapping: false,
     isFist: false,
@@ -48,6 +50,9 @@ const App: React.FC = () => {
   const [baseColor, setBaseColor] = useState("#22d3ee");
   const [logMessage, setLogMessage] = useState("");
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+
+  // NEW: Carousel State
+  const [isCarouselOpen, setIsCarouselOpen] = useState(false);
 
   // NEW: Centralized Click System
   const { clickState, triggerInteraction } = useClickSystem();
@@ -87,6 +92,25 @@ const App: React.FC = () => {
   // --- VOICE COMMAND HANDLERS ---
   const handleVoiceCommand = useCallback((transcript: string) => {
     const command = transcript.toLowerCase().trim();
+
+    // 0. CAROUSEL COMMANDS (Block other commands if active)
+    if (isCarouselOpen) {
+      if (command.includes('close') || command.includes('exit') || command.includes('hide')) {
+        setIsCarouselOpen(false);
+        handleGesture("CAROUSEL CLOSED");
+        return;
+      }
+      return; // Ignore other commands while carousel is open (Phase 1)
+    }
+
+    // ACTIVATION COMMANDS
+    if (command.includes('activate') || command.includes('open') || command.includes('show')) {
+      if (command.includes('carousel') || command.includes('gallery') || command.includes('slider') || command.includes('information')) {
+        setIsCarouselOpen(true);
+        handleGesture("CAROUSEL ACTIVATED");
+        return;
+      }
+    }
 
     // 1. OBJECT MANAGEMENT COMMANDS
 
@@ -158,7 +182,7 @@ const App: React.FC = () => {
         return;
       }
     }
-  }, [spawnObject, clearObjects, handleGesture, setBaseColor, setPulseTrigger, objects.length, priority, grabbedObj, setObjectColor, removeObject]);
+  }, [isCarouselOpen, spawnObject, clearObjects, handleGesture, setBaseColor, setPulseTrigger, objects.length, priority, grabbedObj, setObjectColor, removeObject]);
 
   // Create stable ref for voice handler to prevent re-initialization
   const handleVoiceCommandRef = useRef(handleVoiceCommand);
@@ -192,7 +216,7 @@ const App: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden select-none">
-      {/* Layer 1: Video Background */}
+      {/* Layer 1: Video Background (Always visible) */}
       <div className="absolute inset-0 z-[1]">
         <VideoBackground
           handStateRef={handStateRef}
@@ -201,48 +225,74 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Layer 1.5: Interaction Controller (Logic Layer) */}
-      <InteractionController
-        handStateRef={handStateRef}
-        videoElement={videoElement}
-        onTrigger={triggerInteraction}
-        onGesture={handleGesture}
-      />
-
-      {/* Layer 2: 3D Scene */}
-      <div className="absolute inset-0 z-[5] pointer-events-none">
-        <Canvas camera={{ position: [0, 0, 5], fov: 75 }} gl={{ alpha: true }}>
-          <Aura3D
-            handStateRef={handStateRef}
-            pulseTrigger={pulseTrigger}
-            baseColor={baseColor}
-            objects={objects}
-            objectManager={{
-              updateHover,
-              grabObject,
-              releaseObject,
-              updateGrabbedPosition
-            }}
-            prevPinchRef={prevPinchRef}
-            activeGesture={activeGesture}
-          />
-        </Canvas>
-      </div>
-
-      {/* Layer 3: HUD */}
-      <div className="absolute inset-0 z-[10] pointer-events-none">
-        <HUD
-          logMessage={logMessage}
-          isListening={isMicActive}
-          isSystemListening={false}
-          error={voiceError}
-          onRetryMic={startListening}
-          objectCount={objects.length}
-          activeGesture={activeGesture}
-          clickCount={clickState.count}
-          clickSource={clickState.source}
+      {/* Layer 1.5: Interaction Controller (Logic Layer) - Disabled in Carousel Mode (Phase 1) */}
+      {!isCarouselOpen && (
+        <InteractionController
+          handStateRef={handStateRef}
+          videoElement={videoElement}
+          onTrigger={triggerInteraction}
+          onGesture={handleGesture}
         />
-      </div>
+      )}
+
+      {/* Layer 2: 3D Scene - Hidden in Carousel Mode */}
+      {!isCarouselOpen && (
+        <div className="absolute inset-0 z-[5] pointer-events-none">
+          <Canvas camera={{ position: [0, 0, 5], fov: 75 }} gl={{ alpha: true }}>
+            <Aura3D
+              handStateRef={handStateRef}
+              pulseTrigger={pulseTrigger}
+              baseColor={baseColor}
+              objects={objects}
+              objectManager={{
+                updateHover,
+                grabObject,
+                releaseObject,
+                updateGrabbedPosition
+              }}
+              prevPinchRef={prevPinchRef}
+              activeGesture={activeGesture}
+            />
+          </Canvas>
+        </div>
+      )}
+
+      {/* Layer 3: HUD - Hidden in Carousel Mode */}
+      {!isCarouselOpen && (
+        <div className="absolute inset-0 z-[10] pointer-events-none">
+          <HUD
+            logMessage={logMessage}
+            isListening={isMicActive}
+            isSystemListening={false}
+            error={voiceError}
+            onRetryMic={startListening}
+            objectCount={objects.length}
+            activeGesture={activeGesture}
+            clickCount={clickState.count}
+            clickSource={clickState.source}
+          />
+        </div>
+      )}
+
+      {/* Layer 4: Information Carousel (Overlay) */}
+      <InformationCarousel
+        isVisible={isCarouselOpen}
+        onClose={() => setIsCarouselOpen(false)}
+        handStateRef={handStateRef}
+        clickState={clickState}
+      />
+      {/* Test Button (Phase 1 Only) */}
+      {/* {!isCarouselOpen && (
+        <div className="absolute top-4 left-4 z-[20] pointer-events-auto">
+          <button
+            onClick={() => setIsCarouselOpen(true)}
+            className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 text-cyan-300 rounded text-sm transition-all flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[18px]">gallery_thumbnail</span>
+            Open Carousel
+          </button>
+        </div>
+      )} */}
     </div>
   );
 };

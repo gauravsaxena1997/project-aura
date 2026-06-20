@@ -7,6 +7,7 @@ export interface Landmark {
 
 export interface HandLandmarkResult {
   multiHandLandmarks: Landmark[][];
+  multiHandWorldLandmarks?: Landmark[][];
   multiHandedness: any[];
 }
 
@@ -20,6 +21,7 @@ export interface HandTrackingState {
   isTwoHanded: boolean;
   handDistance: number; // Distance between hands (0.0 to 1.0)
   centerPoint: { x: number, y: number } | null; // Midpoint between hands
+  handDepthDelta: number; // Relative wrist depth between both hands
 
   // Gestures
   isPinching: boolean; // Tip-to-Tip (Grab)
